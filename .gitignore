@@ -5,7 +5,7 @@ Thumbs.db
 *.tmp
 
 # IDE
-#.vscode/
+.vscode/
 .idea/
 *.iml
 *.iws
