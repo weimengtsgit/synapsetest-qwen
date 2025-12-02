@@ -9,7 +9,6 @@ from datetime import datetime
 
 from models.recommendation.strategy_recommender import TestStrategyRecommender
 from models.recommendation.risk_predictor import RiskPredictor, EnvironmentRecommender
-from data.mongodb_client import mongodb_client
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +63,8 @@ class RecommendationService:
             'timestamp': datetime.utcnow().isoformat()
         }
 
-        # Save to history
-        try:
-            history_data = {
-                'task_id': task_id,
-                'context': context,
-                'recommendation': recommendation,
-                'risk_assessment': risk_assessment
-            }
-            mongodb_client.save_recommendation_history(history_data)
-        except Exception as e:
-            logger.error(f"Failed to save recommendation history: {e}")
-
+        # Note: History not saved (MongoDB removed, using Qdrant/Milvus for vector search)
+        
         return result
 
     def get_recommendation_explanation(

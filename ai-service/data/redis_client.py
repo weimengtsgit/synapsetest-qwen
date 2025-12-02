@@ -28,9 +28,19 @@ class RedisClient:
         return cls._instance
 
     def __init__(self):
-        if not REDIS_AVAILABLE:
-            logger.warning("redis not available, using in-memory cache")
+        # Initialize memory cache as fallback
+        if not hasattr(self, '_memory_cache'):
             self._memory_cache = {}
+        
+        # Check if Redis is enabled via environment variable
+        if not ai_config.ENABLE_REDIS:
+            logger.info("Redis disabled by configuration (ENABLE_REDIS=false), using in-memory cache")
+            self._client = None
+            return
+        
+        if not REDIS_AVAILABLE:
+            logger.warning("redis package not available, using in-memory cache")
+            self._client = None
             return
 
         if self._client is None:
@@ -48,7 +58,6 @@ class RedisClient:
             except Exception as e:
                 logger.warning(f"Failed to connect to Redis: {e}, using in-memory cache")
                 self._client = None
-                self._memory_cache = {}
 
     def get(self, key: str) -> Optional[Any]:
         """Get cached value"""

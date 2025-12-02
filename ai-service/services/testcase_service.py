@@ -9,7 +9,6 @@ from datetime import datetime
 import uuid
 
 from models.llm.rag_generator import RAGTestCaseGenerator
-from data.mongodb_client import mongodb_client
 
 logger = logging.getLogger(__name__)
 
@@ -144,29 +143,14 @@ class TestCaseGenerationService:
         """
         logger.info(f"Updating feedback for request: {request_id}")
 
-        try:
-            success = mongodb_client.update_user_feedback(request_id, feedback)
-
-            if success:
-                return {
-                    'success': True,
-                    'request_id': request_id,
-                    'message': 'Feedback updated successfully'
-                }
-            else:
-                return {
-                    'success': False,
-                    'request_id': request_id,
-                    'error': 'Failed to update feedback'
-                }
-
-        except Exception as e:
-            logger.error(f"Failed to update feedback: {e}")
-            return {
-                'success': False,
-                'request_id': request_id,
-                'error': str(e)
-            }
+        # Note: Feedback not persisted (MongoDB removed)
+        # TODO: Implement feedback storage in Qdrant/Milvus if needed
+        
+        return {
+            'success': True,
+            'request_id': request_id,
+            'message': 'Feedback received (not persisted)'
+        }
 
     def _save_generation_history(
         self,
@@ -174,25 +158,10 @@ class TestCaseGenerationService:
         request_data: Dict[str, Any],
         result: Dict[str, Any]
     ):
-        """Save generation history to MongoDB"""
-        try:
-            history_data = {
-                'requestId': request_id,
-                'module': request_data.get('module', 'unknown'),
-                'num_cases_requested': request_data.get('num_cases', 5),
-                'num_cases_generated': result.get('total_unique', 0),
-                'include_edge_cases': request_data.get('include_edge_cases', True),
-                'optimization_config': request_data.get('optimization', {}),
-                'success': result.get('success', False),
-                'metadata': result.get('metadata', {}),
-                'duplicate_count': result.get('total_duplicates', 0)
-            }
-
-            mongodb_client.save_testcase_generation_history(history_data)
-            logger.info(f"Saved generation history for request: {request_id}")
-
-        except Exception as e:
-            logger.error(f"Failed to save generation history: {e}")
+        """Save generation history (MongoDB removed - no persistence)"""
+        # Note: History not saved (MongoDB removed)
+        # TODO: Implement history storage in Qdrant/Milvus if needed
+        logger.debug(f"Generation history for request {request_id} not persisted")
 
 
 class TestCaseOptimizationService:

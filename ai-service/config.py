@@ -3,6 +3,16 @@ AI Service Configuration Management
 """
 import os
 from typing import Optional
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+env_file = Path(__file__).parent / '.env'
+if env_file.exists():
+    load_dotenv(env_file)
+    print(f"✓ Loaded configuration from {env_file}")
+else:
+    print("ℹ No .env file found, using system environment variables and defaults")
 
 class AIConfig:
     """AI Service Configuration"""
@@ -48,6 +58,7 @@ class AIConfig:
     DATABASE_TYPE: str = 'mysql'
 
     # Redis configuration
+    ENABLE_REDIS: bool = os.getenv('ENABLE_REDIS', 'false').lower() in ('true', '1', 'yes')
     REDIS_HOST: str = os.getenv('REDIS_HOST', 'localhost')
     REDIS_PORT: int = int(os.getenv('REDIS_PORT', '6379'))
     REDIS_PASSWORD: Optional[str] = os.getenv('REDIS_PASSWORD', None)

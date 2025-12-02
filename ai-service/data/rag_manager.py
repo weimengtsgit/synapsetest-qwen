@@ -1,13 +1,13 @@
 """
 RAG Manager
 
-Coordinates between Vector DB and MongoDB for semantic search
+Coordinates between Vector DB (Qdrant/Milvus) and MySQL for semantic search
 """
 from typing import List, Dict, Any, Optional
 import logging
 
-from data.vector_db_factory import vector_db_client  # Automatically uses Milvus or ChromaDB
-from data.db_factory import db_client  # Automatically uses MySQL or MongoDB
+from data.vector_db_factory import vector_db_client  # Automatically uses Qdrant or Milvus
+from data.db_factory import db_client  # Uses MySQL for structured data
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ class RAGManager:
     RAG Manager that coordinates vector search and detailed data retrieval
     
     Architecture:
-    1. Vector DB (ChromaDB): Fast semantic similarity search
-    2. Structured DB (MySQL/MongoDB): Complete structured data storage
+    1. Vector DB (Qdrant/Milvus): Fast semantic similarity search
+    2. Structured DB (MySQL): Complete structured data storage
     
     Workflow:
     - Search: Vector DB (get IDs) → Structured DB (get full data)
@@ -29,7 +29,7 @@ class RAGManager:
     
     def __init__(self):
         self.vector_db = vector_db_client
-        self.structured_db = db_client  # MySQL or MongoDB based on config
+        self.structured_db = db_client  # MySQL client
     
     def search_similar_testcases(
         self,
@@ -42,7 +42,7 @@ class RAGManager:
         
         This is the main RAG retrieval method that:
         1. Uses vector DB for semantic search (fast)
-        2. Fetches complete data from MongoDB (detailed)
+        2. Fetches complete data from MySQL (detailed)
         
         Args:
             query_text: Query text (requirement or description)
@@ -102,7 +102,7 @@ class RAGManager:
         """
         logger.info(f"Adding test case: {testcase_data.get('name', 'unnamed')}")
         
-        # Step 1: Save to structured DB (MySQL/MongoDB - source of truth)
+        # Step 1: Save to structured DB (MySQL - source of truth)
         testcase_id = self.structured_db.save_testcase(testcase_data)
         
         if not testcase_id:
@@ -132,7 +132,7 @@ class RAGManager:
         """
         logger.info(f"Batch adding {len(testcases)} test cases")
         
-        mongo_success = 0
+        mysql_success = 0
         vector_success = 0
         testcase_ids = []
         
@@ -140,7 +140,7 @@ class RAGManager:
             tc_id = self.add_testcase(tc)
             if tc_id:
                 testcase_ids.append(tc_id)
-                mongo_success += 1
+                mysql_success += 1
                 # Vector success is logged internally
         
         # Get vector DB stats
@@ -150,7 +150,7 @@ class RAGManager:
         
         result = {
             'total_requested': len(testcases),
-            'mongodb_success': mongo_success,
+            'mysql_success': mysql_success,
             'vector_db_total': vector_success,
             'testcase_ids': testcase_ids
         }
@@ -238,15 +238,12 @@ class RAGManager:
         """
         logger.info("Starting database synchronization...")
         
-        # Get all active test cases from structured DB
-        # This method works for both MySQL and MongoDB
+        # Get all active test cases from MySQL
         try:
-            # Try to get testcases directly
             all_testcases = []
             
-            # Check if it's MySQL or MongoDB
+            # MySQL - use Backend's test_cases table
             if hasattr(self.structured_db, '_connection'):
-                # MySQL - use Backend's test_cases table
                 with self.structured_db._get_cursor() as cursor:
                     cursor.execute("""
                         SELECT * FROM test_cases
@@ -265,13 +262,8 @@ class RAGManager:
                             tc['steps'] = json.loads(tc['steps'])
                         if tc.get('tags') and isinstance(tc['tags'], str):
                             tc['tags'] = json.loads(tc['tags'])
-                            
-            elif hasattr(self.structured_db, '_db'):
-                # MongoDB
-                collection = self.structured_db._db['historical_testcases']
-                all_testcases = list(collection.find({'status': {'$ne': 'deleted'}}))
             else:
-                return {'success': False, 'error': 'Structured database not available'}
+                return {'success': False, 'error': 'MySQL database not available'}
             
             logger.info(f"Found {len(all_testcases)} test cases in structured DB to sync")
             
@@ -313,9 +305,8 @@ class RAGManager:
         structured_stats = {}
         
         try:
-            # Check if it's MySQL or MongoDB
+            # MySQL statistics - use Backend's test_cases table
             if hasattr(self.structured_db, '_connection'):
-                # MySQL statistics - use Backend's test_cases table
                 with self.structured_db._get_cursor() as cursor:
                     # Total count
                     cursor.execute("SELECT COUNT(*) as count FROM test_cases")
@@ -341,23 +332,6 @@ class RAGManager:
                         'active_testcases': active,
                         'by_type': by_type
                     }
-                    
-            elif hasattr(self.structured_db, '_db'):
-                # MongoDB statistics
-                collection = self.structured_db._db['historical_testcases']
-                structured_stats = {
-                    'total_testcases': collection.count_documents({}),
-                    'active_testcases': collection.count_documents({'status': {'$ne': 'deleted'}}),
-                    'by_module': {}
-                }
-                
-                # Count by module
-                pipeline = [
-                    {'$match': {'status': {'$ne': 'deleted'}}},
-                    {'$group': {'_id': '$module', 'count': {'$sum': 1}}}
-                ]
-                for item in collection.aggregate(pipeline):
-                    structured_stats['by_module'][item['_id']] = item['count']
                     
         except Exception as e:
             logger.error(f"Failed to get structured DB statistics: {e}")

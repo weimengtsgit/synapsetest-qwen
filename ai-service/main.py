@@ -10,7 +10,6 @@ import sys
 
 from config import settings, ai_config
 from api import recommendation, testcase
-from data.mongodb_client import mongodb_client
 from data.redis_client import redis_client
 
 # 配置日志
@@ -50,22 +49,15 @@ async def startup_event():
     logger.info(f"LLM Provider: {ai_config.LLM_PROVIDER}")
     logger.info(f"Debug Mode: {settings.debug}")
 
-    # 测试数据库连接
-    try:
-        if mongodb_client.db is not None:
-            logger.info("MongoDB connection established")
-        else:
-            logger.warning("MongoDB not available, some features will be limited")
-    except Exception as e:
-        logger.warning(f"MongoDB connection check failed: {e}")
-
+    # 测试缓存连接
     try:
         if redis_client._client is not None:
-            logger.info("Redis connection established")
+            logger.info("✓ Redis connection established - Using Redis cache")
         else:
-            logger.warning("Redis not available, using in-memory cache")
+            cache_reason = "disabled by configuration" if not ai_config.ENABLE_REDIS else "connection failed"
+            logger.info(f"ℹ Using in-memory cache (Redis {cache_reason})")
     except Exception as e:
-        logger.warning(f"Redis connection check failed: {e}")
+        logger.warning(f"Redis connection check failed: {e}, using in-memory cache")
 
 
 # 关闭事件
@@ -74,13 +66,7 @@ async def shutdown_event():
     """应用关闭时执行"""
     logger.info("Shutting down AI Service")
 
-    # 关闭数据库连接
-    try:
-        mongodb_client.close()
-        logger.info("MongoDB connection closed")
-    except Exception as e:
-        logger.error(f"Error closing MongoDB: {e}")
-
+    # 关闭缓存连接
     try:
         redis_client.close()
         logger.info("Redis connection closed")

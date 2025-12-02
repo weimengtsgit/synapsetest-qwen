@@ -19,8 +19,9 @@ AI Service是SynapseTest系统的核心AI引擎，提供以下功能：
   - 推荐: XGBoost 2.0.2
   - 语义相似度: Sentence-BERT
 - **数据库**:
-  - MongoDB (AI训练数据和历史记录)
-  - Redis (缓存)
+  - MySQL (后端数据) - 与 Backend 共享
+  - Qdrant/Milvus (向量数据库) - 用于语义搜索和 RAG
+  - Redis (分布式缓存) - 可选，默认使用内存缓存
 - **依赖管理**: requirements.txt
 
 ## 项目结构
@@ -45,8 +46,10 @@ ai-service/
 │   ├── recommendation_service.py
 │   └── testcase_service.py
 ├── data/                  # 数据访问层
-│   ├── mongodb_client.py
-│   └── redis_client.py
+│   ├── mysql_client.py    # MySQL客户端
+│   ├── qdrant_client.py   # Qdrant向量数据库
+│   ├── milvus_client.py   # Milvus向量数据库
+│   └── redis_client.py    # Redis缓存客户端
 ├── utils/                 # 工具类
 │   ├── feature_extractor.py   # 特征提取
 │   └── prompt_builder.py      # Prompt构建
@@ -118,7 +121,29 @@ ai-service/
 
 ## 配置说明
 
-### 环境变量
+### 快速开始（推荐）
+
+使用 `.env` 文件配置（最简单）：
+
+```bash
+# 1. 复制配置模板
+cp env.example .env
+
+# 2. 编辑配置文件，修改需要的值
+vim .env
+# 或者使用你喜欢的编辑器
+nano .env
+
+# 3. 启动服务（会自动加载 .env 文件）
+python main.py
+```
+
+**注意**：
+- ✅ `.env` 文件会被自动加载（无需手动 export）
+- ✅ 如果没有 `.env` 文件，会使用默认值
+- ✅ 系统环境变量优先级高于 `.env` 文件
+
+### 环境变量详解
 
 ```bash
 # LLM配置
@@ -133,11 +158,12 @@ MAX_GPU_MEMORY=16GB
 MAX_TOKENS=2048
 TEMPERATURE=0.7
 
-# 数据库
-MONGODB_URI=mongodb://localhost:27017
-MONGODB_DB=synapsetest_ai
+# Redis缓存配置 (可选)
+ENABLE_REDIS=false  # true: 使用Redis缓存, false: 使用内存缓存
 REDIS_HOST=localhost
 REDIS_PORT=6379
+# REDIS_PASSWORD=your_password  # 如果Redis设置了密码
+# REDIS_DB=0  # Redis数据库编号
 
 # 应用配置
 DEBUG=false
@@ -270,12 +296,15 @@ pytest --cov=. tests/
 ```
 2025-11-16 10:00:00 - ai_service - INFO - Starting SynapseTest AI Service v1.0.0
 2025-11-16 10:00:01 - ai_service - INFO - LLM Provider: mock
-2025-11-16 10:00:01 - ai_service - INFO - MongoDB connection established
+2025-11-16 10:00:01 - ai_service - INFO - ✓ Redis connection established - Using Redis cache
 ```
 
 ## 性能优化
 
-1. **缓存策略**: Redis缓存推荐结果，TTL=5分钟
+1. **缓存策略**: 
+   - **Redis缓存** (推荐): 设置 `ENABLE_REDIS=true`，支持分布式缓存，TTL=5分钟
+   - **内存缓存** (默认): 设置 `ENABLE_REDIS=false`，单机内存缓存，适合开发环境
+   - 缓存内容：AI推荐结果、环境状态等
 2. **批处理**: 支持批量生成测试用例
 3. **异步处理**: FastAPI异步端点
 4. **模型优化**: XGBoost模型量化，推理加速
@@ -283,9 +312,10 @@ pytest --cov=. tests/
 ## 限制和注意事项
 
 1. **LLM输出质量**: 依赖模型质量和Prompt工程
-2. **历史数据**: RAG需要足够的历史用例数据
+2. **历史数据**: RAG需要足够的历史用例数据存储在向量数据库中
 3. **资源需求**: 本地Qwen-7B需要至少16GB显存
-4. **MongoDB可选**: 无MongoDB时使用默认配置，功能受限
+4. **向量数据库**: 推荐使用 Qdrant 或 Milvus 用于语义搜索和RAG
+5. **Redis缓存**: 可选，设置 `ENABLE_REDIS=false` (默认) 使用内存缓存
 
 ## 后续优化方向
 
