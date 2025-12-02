@@ -18,7 +18,8 @@ redis==5.0.1
 asyncpg>=0.30.0
 
 # Vector Database & Embeddings
-pymilvus==2.3.4  # Milvus vector database client
+pymilvus==2.3.4  # Milvus vector database client (optional)
+qdrant-client==1.7.0  # Qdrant vector database client (Mac-friendly)
 sentence-transformers==2.2.2  # Text embedding model
 
 # HTTP Client

@@ -22,12 +22,19 @@ class AIConfig:
     TEMPERATURE: float = float(os.getenv('TEMPERATURE', '0.7'))
     TOP_P: float = float(os.getenv('TOP_P', '0.9'))
 
-    # Vector database configuration (Milvus)
+    # Vector database configuration
+    # Supported types: 'milvus', 'qdrant'
+    VECTOR_DB_TYPE: str = os.getenv('VECTOR_DB_TYPE', 'qdrant')
+    
+    # Milvus configuration
     MILVUS_HOST: str = os.getenv('MILVUS_HOST', 'localhost')
     MILVUS_PORT: int = int(os.getenv('MILVUS_PORT', '19530'))
-
-    # Vector database type (fixed to milvus)
-    VECTOR_DB_TYPE: str = 'milvus'
+    
+    # Qdrant configuration
+    QDRANT_HOST: str = os.getenv('QDRANT_HOST', 'localhost')
+    QDRANT_PORT: int = int(os.getenv('QDRANT_PORT', '6333'))
+    QDRANT_GRPC_PORT: int = int(os.getenv('QDRANT_GRPC_PORT', '6334'))
+    QDRANT_MODE: str = os.getenv('QDRANT_MODE', 'server')  # 'server' or 'memory'
 
     # MySQL configuration (Recommended, shared with Backend Service)
     MYSQL_URI: str = os.getenv('MYSQL_URI', 'mysql://root:password@localhost:3306/synapsetest')
@@ -89,6 +96,16 @@ class AIConfig:
         return {
             'host': cls.MILVUS_HOST,
             'port': cls.MILVUS_PORT
+        }
+    
+    @classmethod
+    def get_qdrant_settings(cls) -> dict:
+        """Get Qdrant connection settings"""
+        return {
+            'host': cls.QDRANT_HOST,
+            'port': cls.QDRANT_PORT,
+            'grpc_port': cls.QDRANT_GRPC_PORT,
+            'mode': cls.QDRANT_MODE
         }
 
 

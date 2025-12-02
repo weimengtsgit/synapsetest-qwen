@@ -30,11 +30,12 @@ except ImportError:
     logging.warning("sentence-transformers not installed, using mock embeddings")
 
 from config import ai_config
+from data.vector_db_interface import VectorDBInterface
 
 logger = logging.getLogger(__name__)
 
 
-class MilvusClient:
+class MilvusClient(VectorDBInterface):
     """
     Milvus Vector Database Client for semantic similarity search
     
