@@ -1,0 +1,31 @@
+{
+  // Python 测试配置
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "."
+  ],
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+  "python.testing.cwd": "${workspaceFolder}/ai-service",
+  
+  // Python 解释器
+  "python.defaultInterpreterPath": "${workspaceFolder}/ai-service/.venv/bin/python",
+  
+  // Python 环境
+  "python.envFile": "${workspaceFolder}/ai-service/.env",
+  
+  // 测试资源管理器
+  "testExplorer.useNativeTesting": true,
+  
+  // Python 路径配置
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/ai-service"
+  ],
+  
+  // 终端设置
+  "terminal.integrated.cwd": "${workspaceFolder}/ai-service",
+  
+  // Java 设置
+  "java.compile.nullAnalysis.mode": "automatic",
+  "java.configuration.updateBuildConfiguration": "interactive"
+}
