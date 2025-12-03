@@ -8,6 +8,12 @@
 ### 📘 完整文档
 - **[架构总结](./FINAL_ARCHITECTURE_SUMMARY.md)** - 系统架构和设计说明
 - **[部署指南](./MYSQL_MILVUS_DEPLOYMENT.md)** - 生产环境完整部署文档
+- **[AI功能模块详细设计方案](./AI功能模块详细设计方案.md)** - AI功能模块的详细设计
+
+### 🎨 产品设计文档（新增）
+- **[产品方案](./产品方案.md)** - 完整的产品策划方案（定位、功能、商业模式）
+- **[前端UI设计方案](./前端UI设计方案.md)** - 详细的UI设计规范和页面说明
+- **[UI原型演示](./UI原型演示.html)** - 可交互的HTML原型（浏览器打开）
 
 ### 🧪 测试文档
 - **[测试文档](./test/README_TESTING.md)** - 测试相关文档
@@ -60,6 +66,53 @@ Backend Service (Spring Boot)
 - 基于代码变更分析
 - 风险评估和优先级排序
 - 智能测试范围推荐
+
+---
+
+## 🎨 产品设计文档
+
+### 查看产品方案
+打开 **[产品方案.md](./产品方案.md)** 了解：
+- 🎯 **产品定位**：AI智能测试平台的核心价值主张
+- 👥 **目标用户**：测试工程师、测试经理、开发工程师等
+- 🏗️ **功能架构**：用例生成、策略推荐、质量分析等核心模块
+- 📊 **商业模式**：定价策略和收入预测
+- 🗺️ **产品路线图**：MVP到企业版的演进计划
+- 📈 **成功指标**：效率提升70%+的目标
+
+### 体验UI原型
+**方式1：直接在浏览器打开**
+```bash
+# macOS/Linux
+open docs/UI原型演示.html
+
+# Windows
+start docs/UI原型演示.html
+```
+
+**方式2：使用本地服务器**
+```bash
+cd docs
+python3 -m http.server 8080
+# 访问 http://localhost:8080/UI原型演示.html
+```
+
+### 原型功能亮点
+- ✅ **工作台**：数据概览、快速操作、任务跟踪
+- ✅ **智能生成**：三步向导、实时进度、结果展示
+- ✅ **批量生成**：多需求并行处理
+- ✅ **策略推荐**：风险评估、详细建议
+- ✅ **用例管理**：搜索、筛选、批量操作
+- ✅ **用例优化**：智能去重、优先级排序
+
+### API接口映射
+| 前端功能 | API接口 | 文件 |
+|---------|---------|------|
+| 生成测试用例 | POST /testcase/generate | api/testcase.py:64 |
+| 批量生成 | POST /testcase/generate/batch | api/testcase.py:90 |
+| 策略推荐 | POST /recommendation/strategy | api/recommendation.py:72 |
+| 用例去重 | POST /testcase/optimize/deduplicate | api/testcase.py:142 |
+| 用例排序 | POST /testcase/optimize/prioritize | api/testcase.py:169 |
 
 ---
 
