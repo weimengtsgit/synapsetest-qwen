@@ -11,6 +11,7 @@ xgboost==2.0.2
 transformers==4.35.2
 pandas>=2.2.0
 numpy>=1.26.4
+openai>=1.0.0  # For API-based LLM providers (Qwen API, DeepSeek API)
 
 # Database
 pymysql==1.1.0  # MySQL support (shared with Backend)
@@ -19,7 +20,7 @@ asyncpg>=0.30.0
 
 # Vector Database & Embeddings
 pymilvus>=2.4.0  # Milvus vector database client (optional, Python 3.13 compatible)
-qdrant-client>=1.11.0  # Qdrant vector database client (Mac-friendly, Python 3.13 compatible)
+qdrant-client==1.7.3  # Qdrant vector database client (Mac-friendly, compatible with Qdrant server 1.7.4)
 sentence-transformers==2.2.2  # Text embedding model
 
 # HTTP Client

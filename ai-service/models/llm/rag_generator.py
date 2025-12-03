@@ -6,6 +6,7 @@ Combines LLM generation with RAG (Retrieval Augmented Generation)
 from typing import List, Dict, Any, Optional
 import logging
 import json
+import time
 
 from models.llm.qwen_model import create_llm_model
 from models.optimization.deduplicator import SemanticDeduplicator
@@ -33,12 +34,25 @@ class RAGTestCaseGenerator:
     """
 
     def __init__(self):
-        self.llm = create_llm_model(
-            provider=ai_config.LLM_PROVIDER,
-            model_path=ai_config.QWEN_MODEL_PATH,
-            api_key=ai_config.LLM_API_KEY,
-            api_base=ai_config.LLM_API_BASE
-        )
+        # Prepare kwargs for LLM model creation based on provider
+        llm_kwargs = {
+            'api_key': ai_config.LLM_API_KEY,
+            'api_base': ai_config.LLM_API_BASE,
+            'model_name': ai_config.LLM_MODEL_NAME
+        }
+
+        # Add model path based on provider type
+        provider = ai_config.LLM_PROVIDER
+        if provider == 'qwen-local':
+            llm_kwargs['model_path'] = ai_config.QWEN_MODEL_PATH
+        elif provider == 'deepseek-local':
+            llm_kwargs['model_path'] = ai_config.DEEPSEEK_MODEL_PATH
+            llm_kwargs['model_name'] = ai_config.DEEPSEEK_MODEL_NAME
+        # For backward compatibility
+        elif provider == 'local':
+            llm_kwargs['model_path'] = ai_config.QWEN_MODEL_PATH
+
+        self.llm = create_llm_model(provider=provider, **llm_kwargs)
         self.prompt_builder = PromptBuilder()
         self.doc_parser = DocumentParser()
         self.deduplicator = SemanticDeduplicator(
@@ -92,6 +106,13 @@ class RAGTestCaseGenerator:
 
         # Step 5: Generate using LLM
         logger.info("Calling LLM for test case generation")
+
+        # Log LLM request details - Full prompt
+        logger.info(f"[LLM REQUEST] max_tokens={ai_config.MAX_TOKENS}, temperature={ai_config.TEMPERATURE}, top_p={ai_config.TOP_P}")
+        logger.info(f"[LLM PROMPT - FULL]\n{prompt}")
+
+        llm_start_time = time.time()
+
         try:
             response = self.llm.generate(
                 prompt=prompt,
@@ -99,8 +120,14 @@ class RAGTestCaseGenerator:
                 temperature=ai_config.TEMPERATURE,
                 top_p=ai_config.TOP_P
             )
+
+            llm_elapsed = time.time() - llm_start_time
+            logger.info(f"[LLM RESPONSE] Success, Time: {llm_elapsed:.2f}s, Length: {len(response)} chars")
+            logger.info(f"[LLM RESPONSE - FULL]\n{response}")
+
         except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
+            llm_elapsed = time.time() - llm_start_time
+            logger.error(f"[LLM RESPONSE] Failed, Time: {llm_elapsed:.2f}s, Error: {e}")
             return {
                 'success': False,
                 'error': str(e),
@@ -146,43 +173,159 @@ class RAGTestCaseGenerator:
         """
         Parse LLM response to extract test cases
 
-        Handles JSON, markdown code blocks, and plain text
+        Handles JSON, markdown code blocks, truncated responses, and plain text
         """
+        if not response or not response.strip():
+            logger.warning("Empty LLM response")
+            return []
+
+        # Clean the response
+        response = response.strip()
+
+        # Step 1: Try direct JSON parse (fastest path)
         try:
-            # Try direct JSON parse
             testcases = json.loads(response)
             if isinstance(testcases, list):
+                logger.info(f"Parsed {len(testcases)} test cases (direct JSON)")
                 return testcases
             elif isinstance(testcases, dict) and 'testcases' in testcases:
+                logger.info(f"Parsed {len(testcases['testcases'])} test cases (wrapped JSON)")
                 return testcases['testcases']
         except json.JSONDecodeError:
             pass
 
-        # Try extracting JSON from markdown code blocks
+        # Step 2: Extract JSON from markdown code blocks
         import re
-        json_pattern = r'```(?:json)?\s*(\[.*?\])\s*```'
-        matches = re.findall(json_pattern, response, re.DOTALL)
 
+        # Pattern for markdown code blocks (greedy to capture full content)
+        markdown_patterns = [
+            r'```json\s*(\[[\s\S]*?\])\s*```',  # ```json [...] ```
+            r'```\s*(\[[\s\S]*?\])\s*```',      # ``` [...] ```
+        ]
+
+        for pattern in markdown_patterns:
+            matches = re.findall(pattern, response, re.DOTALL)
+            if matches:
+                for match in matches:
+                    try:
+                        testcases = json.loads(match)
+                        if isinstance(testcases, list):
+                            logger.info(f"Parsed {len(testcases)} test cases (markdown block)")
+                            return testcases
+                    except json.JSONDecodeError:
+                        continue
+
+        # Step 3: Handle truncated markdown block (missing closing ```)
+        # Extract content between ```json and end of string
+        truncated_pattern = r'```json\s*(\[[\s\S]*?)$'
+        matches = re.findall(truncated_pattern, response)
         if matches:
-            try:
-                testcases = json.loads(matches[0])
-                return testcases
-            except json.JSONDecodeError:
-                pass
+            json_str = matches[0].strip()
+            # Try to fix truncated JSON
+            fixed_json = self._fix_truncated_json(json_str)
+            if fixed_json:
+                try:
+                    testcases = json.loads(fixed_json)
+                    if isinstance(testcases, list):
+                        logger.warning(f"Parsed {len(testcases)} test cases from truncated response (repaired)")
+                        return testcases
+                except json.JSONDecodeError:
+                    pass
 
-        # Fallback: try to find any JSON array
-        array_pattern = r'\[\s*\{.*?\}\s*\]'
+        # Step 4: Find any JSON array in the response
+        array_pattern = r'\[\s*\{[\s\S]*?\}\s*\]'
         matches = re.findall(array_pattern, response, re.DOTALL)
 
-        if matches:
+        for match in matches:
             try:
-                testcases = json.loads(matches[0])
-                return testcases
+                testcases = json.loads(match)
+                if isinstance(testcases, list):
+                    logger.info(f"Parsed {len(testcases)} test cases (extracted array)")
+                    return testcases
             except json.JSONDecodeError:
-                pass
+                continue
 
-        logger.warning("Could not parse LLM response as JSON")
+        # Step 5: Try to fix and parse any JSON-like content
+        # Extract from first [ to last ]
+        start_idx = response.find('[')
+        end_idx = response.rfind(']')
+
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            json_str = response[start_idx:end_idx + 1]
+
+            # Try direct parse
+            try:
+                testcases = json.loads(json_str)
+                if isinstance(testcases, list):
+                    logger.info(f"Parsed {len(testcases)} test cases (extracted bounds)")
+                    return testcases
+            except json.JSONDecodeError:
+                # Try to fix truncated JSON
+                fixed_json = self._fix_truncated_json(json_str)
+                if fixed_json:
+                    try:
+                        testcases = json.loads(fixed_json)
+                        if isinstance(testcases, list):
+                            logger.warning(f"Parsed {len(testcases)} test cases (repaired)")
+                            return testcases
+                    except json.JSONDecodeError:
+                        pass
+
+        logger.error(f"Failed to parse LLM response. First 200 chars: {response[:200]}...")
         return []
+
+    def _fix_truncated_json(self, json_str: str) -> Optional[str]:
+        """
+        Attempt to fix truncated JSON by closing unclosed structures
+
+        Args:
+            json_str: Potentially truncated JSON string
+
+        Returns:
+            Fixed JSON string or None if cannot be fixed
+        """
+        if not json_str:
+            return None
+
+        try:
+            # Count opening and closing brackets/braces
+            open_brackets = json_str.count('[')
+            close_brackets = json_str.count(']')
+            open_braces = json_str.count('{')
+            close_braces = json_str.count('}')
+
+            # If already balanced, return as is
+            if open_brackets == close_brackets and open_braces == close_braces:
+                return json_str
+
+            # Make a copy to fix
+            fixed = json_str.rstrip()
+
+            # Remove trailing incomplete string or value
+            # Find the last complete object
+            last_complete = fixed.rfind('}')
+            if last_complete == -1:
+                return None
+
+            # Truncate to last complete object, remove any trailing comma
+            fixed = fixed[:last_complete + 1].rstrip(',').rstrip()
+
+            # Close missing braces
+            while fixed.count('{') > fixed.count('}'):
+                fixed += '}'
+
+            # Close missing brackets
+            while fixed.count('[') > fixed.count(']'):
+                fixed += ']'
+
+            # Validate the fixed JSON
+            json.loads(fixed)
+            logger.info("Successfully repaired truncated JSON")
+            return fixed
+
+        except Exception as e:
+            logger.debug(f"Could not repair JSON: {e}")
+            return None
 
     def _validate_testcases(self, testcases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -249,12 +392,23 @@ class RAGTestCaseGenerator:
 
         edge_prompt = self.prompt_builder.build_edge_case_prompt(requirement_text)
 
+        # Log LLM request details - Full prompt
+        logger.info(f"[LLM REQUEST - EDGE CASES] max_tokens={ai_config.EDGE_CASE_MAX_TOKENS}, temperature={ai_config.EDGE_CASE_TEMPERATURE}, top_p={ai_config.TOP_P}")
+        logger.info(f"[LLM PROMPT - EDGE CASES - FULL]\n{edge_prompt}")
+
+        edge_start_time = time.time()
+
         try:
             response = self.llm.generate(
                 prompt=edge_prompt,
-                max_tokens=1024,
-                temperature=0.8  # Slightly higher temperature for creativity
+                max_tokens=ai_config.EDGE_CASE_MAX_TOKENS,
+                temperature=ai_config.EDGE_CASE_TEMPERATURE,
+                top_p=ai_config.TOP_P
             )
+
+            edge_elapsed = time.time() - edge_start_time
+            logger.info(f"[LLM RESPONSE - EDGE CASES] Success, Time: {edge_elapsed:.2f}s, Length: {len(response)} chars")
+            logger.info(f"[LLM RESPONSE - EDGE CASES - FULL]\n{response}")
 
             edge_cases = self._parse_llm_response(response)
             validated = self._validate_testcases(edge_cases)
@@ -263,7 +417,8 @@ class RAGTestCaseGenerator:
             return validated
 
         except Exception as e:
-            logger.error(f"Edge case generation failed: {e}")
+            edge_elapsed = time.time() - edge_start_time
+            logger.error(f"[LLM RESPONSE - EDGE CASES] Failed, Time: {edge_elapsed:.2f}s, Error: {e}")
             return []
 
     def batch_generate(

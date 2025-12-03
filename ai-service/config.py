@@ -19,6 +19,8 @@ class AIConfig:
 
     # Model paths
     QWEN_MODEL_PATH: str = os.getenv('QWEN_MODEL_PATH', '/models/Qwen-7B-Chat')
+    DEEPSEEK_MODEL_PATH: str = os.getenv('DEEPSEEK_MODEL_PATH', '/models/deepseek-coder-6.7b-instruct')
+    DEEPSEEK_MODEL_NAME: str = os.getenv('DEEPSEEK_MODEL_NAME', 'deepseek-coder')
     SENTENCE_BERT_MODEL: str = 'paraphrase-multilingual-mpnet-base-v2'
     XGBOOST_MODEL_PATH: str = os.getenv('XGBOOST_MODEL_PATH', '/models/xgboost_models/')
 
@@ -31,6 +33,11 @@ class AIConfig:
     MAX_TOKENS: int = int(os.getenv('MAX_TOKENS', '2048'))
     TEMPERATURE: float = float(os.getenv('TEMPERATURE', '0.7'))
     TOP_P: float = float(os.getenv('TOP_P', '0.9'))
+
+    # Edge case generation specific configuration
+    # Edge cases typically need more tokens due to detailed boundary scenarios
+    EDGE_CASE_MAX_TOKENS: int = int(os.getenv('EDGE_CASE_MAX_TOKENS', '3072'))
+    EDGE_CASE_TEMPERATURE: float = float(os.getenv('EDGE_CASE_TEMPERATURE', '0.8'))
 
     # Vector database configuration
     # Supported types: 'milvus', 'qdrant'
@@ -74,10 +81,16 @@ class AIConfig:
     CACHE_TTL: int = int(os.getenv('CACHE_TTL', '300'))  # 5 minutes
     CACHE_MAX_SIZE: int = int(os.getenv('CACHE_MAX_SIZE', '1000'))
 
-    # LLM Provider (local or api)
-    LLM_PROVIDER: str = os.getenv('LLM_PROVIDER', 'mock')  # mock, local, api
+    # LLM Provider configuration
+    # Supported providers: mock, qwen-local, qwen-api, deepseek-local, deepseek-api
+    LLM_PROVIDER: str = os.getenv('LLM_PROVIDER', 'mock')
+
+    # API configuration
     LLM_API_KEY: Optional[str] = os.getenv('LLM_API_KEY', None)
     LLM_API_BASE: Optional[str] = os.getenv('LLM_API_BASE', None)
+
+    # Model name for API providers (e.g., qwen-plus, deepseek-chat, deepseek-coder)
+    LLM_MODEL_NAME: Optional[str] = os.getenv('LLM_MODEL_NAME', None)
 
     @classmethod
     def get_mysql_settings(cls) -> dict:

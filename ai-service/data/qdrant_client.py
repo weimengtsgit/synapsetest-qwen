@@ -83,12 +83,12 @@ class QdrantClient(VectorDBInterface):
                     
                     for attempt in range(max_retries):
                         try:
+                            # Use URL format to avoid version compatibility issues
+                            # qdrant-client 1.16.1 works better with URL format
                             self._client = QdrantSDK(
-                                host=ai_config.QDRANT_HOST,
-                                port=ai_config.QDRANT_PORT,
-                                # grpc_port=ai_config.QDRANT_GRPC_PORT,  # Optional gRPC port
+                                url=f"http://{ai_config.QDRANT_HOST}:{ai_config.QDRANT_PORT}",
                                 prefer_grpc=False,  # Use REST API by default
-                                timeout=10  # 10 second timeout
+                                timeout=10,  # 10 second timeout
                             )
                             # Test connection by getting collections
                             self._client.get_collections()

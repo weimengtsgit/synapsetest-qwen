@@ -41,8 +41,14 @@ logging.basicConfig(
     level=getattr(logging, settings.log_level),
     format=log_format,
     datefmt=date_format,
-    handlers=handlers
+    handlers=handlers,
+    force=True  # 强制覆盖已存在的配置
 )
+
+# 设置 uvicorn 相关 logger 的级别
+logging.getLogger("uvicorn").setLevel(getattr(logging, settings.log_level))
+logging.getLogger("uvicorn.access").setLevel(getattr(logging, settings.log_level))
+logging.getLogger("uvicorn.error").setLevel(getattr(logging, settings.log_level))
 
 logger = logging.getLogger(__name__)
 
@@ -142,5 +148,7 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True
+        reload=True,
+        log_level=settings.log_level.lower(),  # 添加日志级别配置
+        log_config=None  # 禁用 uvicorn 默认日志配置，使用我们的配置
     )

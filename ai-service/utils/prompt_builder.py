@@ -139,8 +139,32 @@ class PromptBuilder:
 3. 权限和安全边界
 4. 性能边界（大数据量、高并发）
 
-请以JSON格式输出测试用例：
-"""
+【输出要求】
+1. 生成 5-10 个边界测试用例（控制数量以确保完整性）
+2. 直接返回 JSON 数组，不要使用 markdown 代码块（不要用 ```json）
+3. 严格按照以下 JSON 格式：
+
+[
+  {{
+    "name": "测试用例名称",
+    "priority": "P0/P1/P2",
+    "type": "边界测试",
+    "preconditions": ["前置条件1", "前置条件2"],
+    "steps": [
+      {{"step": 1, "action": "操作步骤", "expected": "预期结果"}},
+      {{"step": 2, "action": "操作步骤", "expected": "预期结果"}}
+    ],
+    "tags": ["边界条件", "相关标签"]
+  }}
+]
+
+【注意】
+- 只返回 JSON 数组，不要添加任何说明文字
+- 不要使用 ```json 或 ``` 包裹
+- 确保 JSON 格式完整正确，所有括号和引号都要闭合
+- 如果内容较多，优先保证 JSON 完整性，可以适当减少测试用例数量
+
+现在请直接输出 JSON 数组："""
 
     def build_api_test_prompt(self, api_spec: Dict[str, Any]) -> str:
         """Build prompt for API test case generation"""
