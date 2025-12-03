@@ -76,12 +76,29 @@ class QdrantClient(VectorDBInterface):
                     self._client = QdrantSDK(":memory:")
                 else:
                     logger.info(f"Connecting to Qdrant: {ai_config.QDRANT_HOST}:{ai_config.QDRANT_PORT}")
-                    self._client = QdrantSDK(
-                        host=ai_config.QDRANT_HOST,
-                        port=ai_config.QDRANT_PORT,
-                        # grpc_port=ai_config.QDRANT_GRPC_PORT,  # Optional gRPC port
-                        prefer_grpc=False  # Use REST API by default
-                    )
+                    # Add timeout and retry logic for server mode
+                    import time
+                    max_retries = 3
+                    retry_delay = 2  # seconds
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            self._client = QdrantSDK(
+                                host=ai_config.QDRANT_HOST,
+                                port=ai_config.QDRANT_PORT,
+                                # grpc_port=ai_config.QDRANT_GRPC_PORT,  # Optional gRPC port
+                                prefer_grpc=False,  # Use REST API by default
+                                timeout=10  # 10 second timeout
+                            )
+                            # Test connection by getting collections
+                            self._client.get_collections()
+                            break  # Success, exit retry loop
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                logger.warning(f"Qdrant connection attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {retry_delay}s...")
+                                time.sleep(retry_delay)
+                            else:
+                                raise  # Re-raise on last attempt
                 
                 # Initialize collection
                 self._init_collection()
@@ -99,8 +116,10 @@ class QdrantClient(VectorDBInterface):
                 logger.info("✅ Qdrant client initialized successfully")
                 
             except Exception as e:
-                logger.error(f"Failed to connect to Qdrant: {e}")
+                logger.error(f"Failed to connect to Qdrant after retries: {e}")
+                logger.warning("Qdrant will operate in degraded mode. Please ensure Qdrant service is running.")
                 self._connected = False
+                self._client = None
     
     def _init_collection(self):
         """

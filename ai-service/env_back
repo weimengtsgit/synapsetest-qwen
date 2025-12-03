@@ -69,3 +69,7 @@ SIMILARITY_THRESHOLD=0.85
 # ============ 其他配置 ============
 # 数据库类型
 DATABASE_TYPE=mysql
+MYSQL_URI=mysql://root:synapsetest123@localhost:3306/synapsetest
+VECTOR_DB_TYPE=qdrant
+QDRANT_GRPC_PORT=6334
+QDRANT_MODE=server
