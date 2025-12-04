@@ -72,8 +72,12 @@ class QdrantClient(VectorDBInterface):
                 # Connect to Qdrant
                 # Support both in-memory mode and server mode
                 if ai_config.QDRANT_MODE == 'memory':
-                    logger.info("Initializing Qdrant in memory mode")
-                    self._client = QdrantSDK(":memory:")
+                    logger.info("Initializing Qdrant in memory mode with persistence")
+                    from pathlib import Path
+                    storage_path = Path(__file__).parent.parent / "data" / "qdrant_storage"
+                    storage_path.mkdir(parents=True, exist_ok=True)
+                    self._client = QdrantSDK(path=str(storage_path))
+                    logger.info(f"Qdrant storage path: {storage_path}")
                 else:
                     logger.info(f"Connecting to Qdrant: {ai_config.QDRANT_HOST}:{ai_config.QDRANT_PORT}")
                     # Add timeout and retry logic for server mode

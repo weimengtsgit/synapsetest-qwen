@@ -285,3 +285,4 @@ class DeepSeekAPIModel(BaseLLMModel):
             'api_base': self.api_base,
             'capabilities': ['text-generation', 'code-generation', 'chat']
         }
+
