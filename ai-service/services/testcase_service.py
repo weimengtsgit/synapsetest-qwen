@@ -7,8 +7,10 @@ from typing import Dict, Any, List
 import logging
 from datetime import datetime
 import uuid
+import json
 
 from models.llm.rag_generator import RAGTestCaseGenerator
+from data.vector_db_factory import vector_db_client  # Auto-selected based on VECTOR_DB_TYPE
 
 logger = logging.getLogger(__name__)
 
@@ -134,23 +136,114 @@ class TestCaseGenerationService:
         """
         Update user feedback for generated test cases
 
+        Stores feedback in vector database for future model improvement.
+        Supports both Qdrant and Milvus backends (auto-selected via VECTOR_DB_TYPE).
+
         Args:
             request_id: Generation request ID
-            feedback: User feedback data
+            feedback: User feedback data containing:
+                - rating: int (1-5)
+                - comments: str (optional)
+                - accepted_cases: List[str] (optional)
+                - rejected_cases: List[str] (optional)
 
         Returns:
-            Update result
+            Update result with storage status
         """
         logger.info(f"Updating feedback for request: {request_id}")
 
-        # Note: Feedback not persisted (MongoDB removed)
-        # TODO: Implement feedback storage in Qdrant/Milvus if needed
-        
-        return {
-            'success': True,
-            'request_id': request_id,
-            'message': 'Feedback received (not persisted)'
-        }
+        try:
+            # Prepare feedback document for vector storage
+            feedback_doc = {
+                'request_id': request_id,
+                'rating': feedback.get('rating'),
+                'comments': feedback.get('comments', ''),
+                'accepted_cases': feedback.get('accepted_cases', []),
+                'rejected_cases': feedback.get('rejected_cases', []),
+                'timestamp': datetime.utcnow().isoformat(),
+                'type': 'user_feedback'  # Document type for filtering
+            }
+
+            # Create searchable text for embedding
+            # This allows finding similar feedback patterns
+            feedback_text_parts = [
+                f"Request: {request_id}",
+                f"Rating: {feedback.get('rating')}/5"
+            ]
+
+            if feedback.get('comments'):
+                feedback_text_parts.append(f"Comments: {feedback.get('comments')}")
+
+            if feedback.get('accepted_cases'):
+                feedback_text_parts.append(f"Accepted: {len(feedback.get('accepted_cases'))} cases")
+
+            if feedback.get('rejected_cases'):
+                feedback_text_parts.append(f"Rejected: {len(feedback.get('rejected_cases'))} cases")
+
+            feedback_text = " | ".join(feedback_text_parts)
+
+            # Store in vector database
+            # This enables semantic search for similar feedback patterns
+            feedback_id = f"feedback_{request_id}_{int(datetime.utcnow().timestamp())}"
+
+            success = vector_db_client.add_testcase(
+                testcase_id=feedback_id,
+                testcase_data={
+                    'name': feedback_text,
+                    'description': json.dumps(feedback_doc),
+                    'module': 'feedback',  # Special module for feedback
+                    'priority': self._rating_to_priority(feedback.get('rating', 3)),
+                    'type': 'user_feedback'
+                }
+            )
+
+            if success:
+                logger.info(f"✅ Feedback stored in vector database: {feedback_id}")
+                return {
+                    'success': True,
+                    'request_id': request_id,
+                    'feedback_id': feedback_id,
+                    'message': 'Feedback received and stored successfully',
+                    'storage': 'vector_db',
+                    'vector_db_type': type(vector_db_client).__name__
+                }
+            else:
+                logger.warning(f"⚠️ Failed to store feedback in vector database")
+                return {
+                    'success': True,  # Still success from API perspective
+                    'request_id': request_id,
+                    'message': 'Feedback received but not persisted',
+                    'storage': 'none'
+                }
+
+        except Exception as e:
+            logger.error(f"Error storing feedback: {e}", exc_info=True)
+            # Don't fail the API call if storage fails
+            return {
+                'success': True,
+                'request_id': request_id,
+                'message': f'Feedback received but storage failed: {str(e)}',
+                'storage': 'error'
+            }
+
+    def _rating_to_priority(self, rating: int) -> str:
+        """
+        Convert user rating to priority level for filtering
+
+        Args:
+            rating: User rating (1-5)
+
+        Returns:
+            Priority level (P0-P3)
+        """
+        if rating >= 5:
+            return 'P0'  # Excellent feedback
+        elif rating >= 4:
+            return 'P1'  # Good feedback
+        elif rating >= 3:
+            return 'P2'  # Average feedback
+        else:
+            return 'P3'  # Poor feedback
 
     def _save_generation_history(
         self,
@@ -158,10 +251,146 @@ class TestCaseGenerationService:
         request_data: Dict[str, Any],
         result: Dict[str, Any]
     ):
-        """Save generation history (MongoDB removed - no persistence)"""
-        # Note: History not saved (MongoDB removed)
-        # TODO: Implement history storage in Qdrant/Milvus if needed
-        logger.debug(f"Generation history for request {request_id} not persisted")
+        """
+        Save generation history to vector database
+
+        Stores generated test cases in vector database for:
+        1. RAG (Retrieval Augmented Generation) - Learn from historical cases
+        2. Semantic search - Find similar test cases
+        3. Quality improvement - Analyze patterns in successful cases
+
+        Supports both Qdrant and Milvus backends (auto-selected via VECTOR_DB_TYPE).
+
+        Args:
+            request_id: Generation request ID
+            request_data: Original request data
+            result: Generation result containing testcases
+        """
+        try:
+            # Extract generated testcases
+            testcases = result.get('testcases', [])
+
+            if not testcases:
+                logger.debug(f"No testcases to save for request {request_id}")
+                return
+
+            module = request_data.get('module', 'unknown')
+            total_added = 0
+            failed_count = 0
+
+            # Add each testcase to vector database
+            for idx, testcase in enumerate(testcases):
+                try:
+                    # Generate unique ID for this testcase
+                    testcase_id = f"{request_id}_tc_{idx}_{int(datetime.utcnow().timestamp())}"
+
+                    # Prepare testcase data with metadata
+                    testcase_data = {
+                        'name': testcase.get('name', f'Testcase {idx + 1}'),
+                        'description': self._build_testcase_description(testcase),
+                        'module': module,
+                        'priority': testcase.get('priority', 'P2'),
+                        'type': testcase.get('type', '功能测试'),
+                        'steps': testcase.get('steps', []),
+                        'preconditions': testcase.get('preconditions', []),
+                        'tags': testcase.get('tags', []),
+                        'request_id': request_id,  # Link back to generation request
+                        'generated_at': datetime.utcnow().isoformat()
+                    }
+
+                    # Add to vector database
+                    success = vector_db_client.add_testcase(
+                        testcase_id=testcase_id,
+                        testcase_data=testcase_data
+                    )
+
+                    if success:
+                        total_added += 1
+                        logger.debug(f"Added testcase to vector DB: {testcase_id}")
+                    else:
+                        failed_count += 1
+                        logger.warning(f"Failed to add testcase: {testcase_id}")
+
+                except Exception as e:
+                    failed_count += 1
+                    logger.error(f"Error adding testcase {idx} to vector DB: {e}", exc_info=True)
+
+            # Log summary
+            if total_added > 0:
+                logger.info(
+                    f"✅ Saved {total_added}/{len(testcases)} testcases to vector database "
+                    f"(request: {request_id}, module: {module}, DB: {type(vector_db_client).__name__})"
+                )
+
+            if failed_count > 0:
+                logger.warning(
+                    f"⚠️ Failed to save {failed_count}/{len(testcases)} testcases to vector database"
+                )
+
+        except Exception as e:
+            logger.error(f"Error saving generation history: {e}", exc_info=True)
+            # Don't fail the generation request if history save fails
+            logger.warning("Generation history not persisted due to error")
+
+    def _build_testcase_description(self, testcase: Dict[str, Any]) -> str:
+        """
+        Build searchable description text for testcase embedding
+
+        Creates a rich text representation of the testcase for semantic search.
+        This enables RAG to find similar test cases effectively.
+
+        Args:
+            testcase: Testcase data
+
+        Returns:
+            Formatted description text for embedding
+        """
+        description_parts = []
+
+        # Add testcase name
+        name = testcase.get('name', '')
+        if name:
+            description_parts.append(f"Test: {name}")
+
+        # Add preconditions
+        preconditions = testcase.get('preconditions', [])
+        if preconditions:
+            if isinstance(preconditions, list):
+                precond_text = ", ".join(str(p) for p in preconditions)
+                description_parts.append(f"Preconditions: {precond_text}")
+
+        # Add test steps summary
+        steps = testcase.get('steps', [])
+        if steps and isinstance(steps, list):
+            step_count = len(steps)
+            description_parts.append(f"Steps: {step_count}")
+
+            # Add first 3 step actions for better semantic search
+            for i, step in enumerate(steps[:3]):
+                if isinstance(step, dict):
+                    action = step.get('action', '')
+                    expected = step.get('expected', '')
+                    if action:
+                        description_parts.append(f"Step {i+1}: {action}")
+                    if expected:
+                        description_parts.append(f"Expected: {expected}")
+
+        # Add tags
+        tags = testcase.get('tags', [])
+        if tags:
+            if isinstance(tags, list):
+                tags_text = ", ".join(str(t) for t in tags)
+                description_parts.append(f"Tags: {tags_text}")
+
+        # Add priority and type
+        priority = testcase.get('priority', '')
+        test_type = testcase.get('type', '')
+        if priority:
+            description_parts.append(f"Priority: {priority}")
+        if test_type:
+            description_parts.append(f"Type: {test_type}")
+
+        return " | ".join(description_parts)
 
 
 class TestCaseOptimizationService:

@@ -7,6 +7,7 @@ Alternative to Milvus with better cross-platform support
 from typing import List, Dict, Any, Optional
 import logging
 import uuid
+import os
 
 try:
     from qdrant_client import QdrantClient as QdrantSDK
@@ -109,10 +110,35 @@ class QdrantClient(VectorDBInterface):
                 
                 # Initialize embedding model
                 if SENTENCE_TRANSFORMERS_AVAILABLE:
-                    self._embedding_model = SentenceTransformer(
-                        'paraphrase-multilingual-MiniLM-L12-v2'
-                    )
-                    logger.info("Loaded embedding model: paraphrase-multilingual-MiniLM-L12-v2")
+                    # Temporarily disable HuggingFace offline mode to load model from cache
+                    # This is necessary because SentenceTransformer checks model metadata online
+                    # even when the model is cached locally
+                    hf_offline = os.environ.get('HF_HUB_OFFLINE')
+                    transformers_offline = os.environ.get('TRANSFORMERS_OFFLINE')
+                    hf_datasets_offline = os.environ.get('HF_DATASETS_OFFLINE')
+
+                    # Temporarily unset offline mode
+                    if hf_offline:
+                        os.environ.pop('HF_HUB_OFFLINE', None)
+                    if transformers_offline:
+                        os.environ.pop('TRANSFORMERS_OFFLINE', None)
+                    if hf_datasets_offline:
+                        os.environ.pop('HF_DATASETS_OFFLINE', None)
+
+                    try:
+                        self._embedding_model = SentenceTransformer(
+                            'paraphrase-multilingual-MiniLM-L12-v2'
+                        )
+                        logger.info("Loaded embedding model: paraphrase-multilingual-MiniLM-L12-v2")
+                    finally:
+                        # Restore offline mode settings
+                        if hf_offline:
+                            os.environ['HF_HUB_OFFLINE'] = hf_offline
+                        if transformers_offline:
+                            os.environ['TRANSFORMERS_OFFLINE'] = transformers_offline
+                        if hf_datasets_offline:
+                            os.environ['HF_DATASETS_OFFLINE'] = hf_datasets_offline
+                        logger.debug("Restored HuggingFace offline mode after model loading")
                 else:
                     logger.warning("Sentence transformers not available, using mock embeddings")
                 
