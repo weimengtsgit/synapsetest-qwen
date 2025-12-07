@@ -286,3 +286,4 @@ class DeepSeekAPIModel(BaseLLMModel):
             'capabilities': ['text-generation', 'code-generation', 'chat']
         }
 
+
