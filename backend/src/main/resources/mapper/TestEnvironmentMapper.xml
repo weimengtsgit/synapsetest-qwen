@@ -9,7 +9,7 @@
         <result property="name" column="name"/>
         <result property="description" column="description"/>
         <result property="url" column="url"/>
-        <result property="config" column="config" typeHandler="com.synapsetest.testmanagement.config.JsonTypeHandler"/>
+        <result property="config" column="config" typeHandler="com.synapsetest.testmanagement.config.JsonMapTypeHandler"/>
         <result property="status" column="status"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -45,7 +45,7 @@
             #{description},
             #{url},
             #{status},
-            #{config, typeHandler=com.synapsetest.testmanagement.config.JsonTypeHandler},
+            #{config, typeHandler=com.synapsetest.testmanagement.config.JsonMapTypeHandler},
             #{createdAt},
             #{updatedAt}
         )
@@ -58,7 +58,7 @@
             description = #{description},
             url = #{url},
             status = #{status},
-            config = #{config, typeHandler=com.synapsetest.testmanagement.config.JsonTypeHandler},
+            config = #{config, typeHandler=com.synapsetest.testmanagement.config.JsonMapTypeHandler},
             updated_at = #{updatedAt}
         WHERE id = #{id}
     </update>
