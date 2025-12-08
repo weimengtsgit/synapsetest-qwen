@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS test_tasks (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    environment VARCHAR(50) NOT NULL CHECK (environment IN ('DEV', 'TEST', 'STAGING', 'PROD')),
+    environment VARCHAR(50) NOT NULL,
     version VARCHAR(50) NOT NULL,
     test_scope VARCHAR(50),
     status VARCHAR(20) NOT NULL CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'CANCELLED')),

@@ -114,3 +114,5 @@ coverage/
 .cache/
 temp/
 tmp/
+
+volumes/
